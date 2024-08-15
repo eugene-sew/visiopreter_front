@@ -1,2 +1,3 @@
 import hero from "./Male Female Illustration.png";
-export { hero };
+import logo from "./logo.png";
+export { hero, logo };
