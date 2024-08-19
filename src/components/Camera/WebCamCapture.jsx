@@ -5,18 +5,27 @@ import * as tf from "@tensorflow/tfjs";
 import p_class from "../../model/classes.json";
 import p_model from "../../model/model.tflite";
 
-const WebCamCapture = ({ isLive }) => {
+const WebCamCapture = ({ isLive, facingMode }) => {
   const webcamRef = useRef(null);
   const [model, setModel] = useState(null);
   const [classes, setClasses] = useState([]);
   const [prediction, setPrediction] = useState("");
+  const [inputDims, setInputDims] = useState({ inputHeight: 0, inputWidth: 0 });
+  // const [facingMode, setFacingMode] = useState("user"); // State for camera facing mode
 
   useEffect(() => {
     const loadModel = async () => {
-      // await tf.setBackend("cpu"); // Ensure the correct backend is used
-      // await tf.ready();
       const tfliteModel = await tflite.loadTFLiteModel(p_model);
       setModel(tfliteModel);
+
+      // Extract input shape from the model
+      const inputShape = tfliteModel.inputs[0].shape;
+      const inputHeight = inputShape[1];
+      const inputWidth = inputShape[2];
+
+      console.log("shape: ", inputShape);
+
+      setInputDims({ inputHeight, inputWidth });
     };
 
     const loadClasses = async () => {
@@ -37,23 +46,28 @@ const WebCamCapture = ({ isLive }) => {
       const video = webcamRef.current.video;
       const videoTensor = tf.browser.fromPixels(video);
 
-      // Preprocess the frame (resize, normalize, etc.) as required by your model
-      const resizedTensor = tf.image.resizeBilinear(videoTensor, [
-        inputHeight,
-        inputWidth,
-      ]);
-      const normalizedTensor = resizedTensor.div(255.0).expandDims(0);
+      const { inputHeight, inputWidth } = inputDims;
 
-      const prediction = await model.predict(normalizedTensor);
+      // Ensure that inputDims are valid before processing the frame
+      if (inputHeight > 0 && inputWidth > 0) {
+        // Preprocess the frame (resize, normalize, etc.) as required by your model
+        const resizedTensor = tf.image.resizeBilinear(videoTensor, [
+          inputHeight,
+          inputWidth,
+        ]);
+        const normalizedTensor = resizedTensor.div(255.0).expandDims(0);
 
-      const predictedClassIndex = prediction.argMax(-1).dataSync()[0];
-      setPrediction(classes[predictedClassIndex]);
+        const prediction = await model.predict(normalizedTensor);
 
-      tf.dispose(videoTensor);
-      tf.dispose(resizedTensor);
-      tf.dispose(normalizedTensor);
+        const predictedClassIndex = prediction.argMax(-1).dataSync()[0];
+        setPrediction(classes[predictedClassIndex]);
+
+        tf.dispose(videoTensor);
+        tf.dispose(resizedTensor);
+        tf.dispose(normalizedTensor);
+      }
     }
-  }, [model, classes]);
+  }, [model, classes, inputDims]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -66,15 +80,15 @@ const WebCamCapture = ({ isLive }) => {
   return (
     <div className="w-fulll h-full">
       {isLive && (
-        <Webcam
-          ref={webcamRef}
-          style={{ width: "100%", height: "100%" }}
-          videoConstraints={{
-            width: 640,
-            height: 480,
-            facingMode: "user",
-          }}
-        />
+        <div>
+          <Webcam
+            ref={webcamRef}
+            className="absolute top-0 left-0 w-full h-full object-cover"
+            videoConstraints={{
+              facingMode: facingMode, // Apply the current facing mode
+            }}
+          />
+        </div>
       )}
 
       {!isLive && (

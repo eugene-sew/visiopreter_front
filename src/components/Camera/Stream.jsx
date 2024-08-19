@@ -1,13 +1,22 @@
 import { useOutletContext } from "react-router-dom";
 import UploadModal from "./UploadModal";
 import WebCamCapture from "./WebCamCapture";
+import { useState } from "react";
 
-const Stream = ({ showModal, handleOpenModal, handleCloseModal }) => {
-  const isLive = useOutletContext();
+const Stream = ({
+  showModal,
+  handleOpenModal,
+  handleCloseModal,
+  facingMode,
+  isLive,
+}) => {
   return (
     <div className="  mt-5 rounded-md h-full grid grid-rows-5 grid-cols-1 md:grid-cols-5 md:grid-rows-1 gap-7">
       <div className="bg-red-600 h-full row-span-4 md:col-span-4 overflow-hidden rounded-md relative">
-        <WebCamCapture isLive={isLive} />
+        <WebCamCapture
+          isLive={isLive}
+          facingMode={facingMode}
+        />
         {showModal && (
           <>
             <UploadModal
