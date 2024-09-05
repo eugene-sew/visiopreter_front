@@ -6,6 +6,7 @@ import {
   GestureRecognizer,
   DrawingUtils,
 } from "@mediapipe/tasks-vision";
+import model from "../../model/visiorec.task";
 
 const WebCamCapture = ({ isLive, facingMode, handleInterpretUpdate }) => {
   const webcamRef = useRef(null);
@@ -23,10 +24,10 @@ const WebCamCapture = ({ isLive, facingMode, handleInterpretUpdate }) => {
     );
     const recognizer = await GestureRecognizer.createFromOptions(vision, {
       baseOptions: {
-        modelAssetPath:
-          "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task",
+        modelAssetPath: model,
         delegate: "GPU",
       },
+      numHands: 2,
       runningMode: runningMode,
     });
     setGestureRecognizer(recognizer);
@@ -61,7 +62,7 @@ const WebCamCapture = ({ isLive, facingMode, handleInterpretUpdate }) => {
 
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.save();
-        ctx.scale(-1, 1); // Flip horizontally
+        ctx.scale(-1, 1);
         ctx.translate(-canvas.width, 0);
         for (const landmarks of results.landmarks) {
           drawingUtils.drawConnectors(
