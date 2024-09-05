@@ -31,8 +31,8 @@ const Stream = ({
           </>
         )}
       </div>
-      <div className="bg-red-600 h-full md:col-span-1 rounded-md flex-wrap text-wrap">
-        {rawInterpret}
+      <div className="bg-gray-200 h-full md:col-span-1 rounded-md flex items-center justify-center text-center">
+        <div className="font-semibold text-3xl">{rawInterpret}</div>
       </div>
     </div>
   );
