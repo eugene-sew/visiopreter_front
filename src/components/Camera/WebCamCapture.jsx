@@ -1,74 +1,102 @@
+/* eslint-disable no-unused-vars */
 import React, { useRef, useCallback, useState, useEffect } from "react";
 import Webcam from "react-webcam";
-import * as tflite from "@tensorflow/tfjs-tflite";
-import * as tf from "@tensorflow/tfjs";
-import p_class from "../../model/classes.json";
-import p_model from "../../model/model.tflite";
+import {
+  FilesetResolver,
+  GestureRecognizer,
+  DrawingUtils,
+} from "@mediapipe/tasks-vision";
 
-const WebCamCapture = ({ isLive, facingMode }) => {
+const WebCamCapture = ({ isLive, facingMode, handleInterpretUpdate }) => {
   const webcamRef = useRef(null);
-  const [model, setModel] = useState(null);
-  const [classes, setClasses] = useState([]);
+  const canvasRef = useRef(null);
+  const [gestureRecognizer, setGestureRecognizer] = useState(null);
   const [prediction, setPrediction] = useState("");
-  const [inputDims, setInputDims] = useState({ inputHeight: 0, inputWidth: 0 });
-  // const [facingMode, setFacingMode] = useState("user"); // State for camera facing mode
+  const videoHeight = "360px";
+  const videoWidth = "580px";
+  const runningMode = "VIDEO";
 
+  // Initialize the gesture recognizer
+  const createGestureRecognizer = async () => {
+    const vision = await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
+    );
+    const recognizer = await GestureRecognizer.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath:
+          "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task",
+        delegate: "GPU",
+      },
+      runningMode: runningMode,
+    });
+    setGestureRecognizer(recognizer);
+  };
+
+  // Load the model on component mount
   useEffect(() => {
-    const loadModel = async () => {
-      const tfliteModel = await tflite.loadTFLiteModel(p_model);
-      setModel(tfliteModel);
-
-      // Extract input shape from the model
-      const inputShape = tfliteModel.inputs[0].shape;
-      const inputHeight = inputShape[1];
-      const inputWidth = inputShape[2];
-
-      console.log("shape: ", inputShape);
-
-      setInputDims({ inputHeight, inputWidth });
-    };
-
-    const loadClasses = async () => {
-      const classesJson = p_class;
-      setClasses(classesJson);
-    };
-
-    loadModel();
-    loadClasses();
+    createGestureRecognizer();
   }, []);
 
+  // Process each video frame for gesture recognition
   const processFrame = useCallback(async () => {
     if (
       typeof webcamRef.current !== "undefined" &&
       webcamRef.current !== null &&
-      webcamRef.current.video.readyState === 4
+      webcamRef.current.video.readyState === 4 &&
+      gestureRecognizer
     ) {
       const video = webcamRef.current.video;
-      const videoTensor = tf.browser.fromPixels(video);
+      const nowInMs = Date.now();
+      const results = gestureRecognizer.recognizeForVideo(video, nowInMs);
 
-      const { inputHeight, inputWidth } = inputDims;
+      if (results.landmarks && canvasRef.current) {
+        const canvasCtx = canvasRef.current.getContext("2d");
+        const drawingUtils = new DrawingUtils(canvasCtx);
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext("2d");
 
-      // Ensure that inputDims are valid before processing the frame
-      if (inputHeight > 0 && inputWidth > 0) {
-        // Preprocess the frame (resize, normalize, etc.) as required by your model
-        const resizedTensor = tf.image.resizeBilinear(videoTensor, [
-          inputHeight,
-          inputWidth,
-        ]);
-        const normalizedTensor = resizedTensor.div(255.0).expandDims(0);
+        // Adjust canvas dimensions based on the video
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
 
-        const prediction = await model.predict(normalizedTensor);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.save();
+        ctx.scale(-1, 1); // Flip horizontally
+        ctx.translate(-canvas.width, 0);
+        for (const landmarks of results.landmarks) {
+          drawingUtils.drawConnectors(
+            landmarks,
+            GestureRecognizer.HAND_CONNECTIONS,
+            {
+              color: "#00FF00",
+              lineWidth: 5,
+            }
+          );
+          drawingUtils.drawLandmarks(landmarks, {
+            color: "#FF0000",
+            lineWidth: 2,
+          });
+        }
 
-        const predictedClassIndex = prediction.argMax(-1).dataSync()[0];
-        setPrediction(classes[predictedClassIndex]);
-
-        tf.dispose(videoTensor);
-        tf.dispose(resizedTensor);
-        tf.dispose(normalizedTensor);
+        // Update prediction
+        if (results.gestures.length > 0) {
+          const categoryName = results.gestures[0][0].categoryName;
+          const categoryScore = parseFloat(
+            results.gestures[0][0].score * 100
+          ).toFixed(2);
+          const handedness = results.handednesses[0][0].displayName;
+          setPrediction(
+            `GestureRecognizer: ${categoryName}\nConfidence: ${categoryScore}%\nHandedness: ${handedness}`
+          );
+          handleInterpretUpdate(categoryName);
+        } else {
+          setPrediction("No gesture detected");
+        }
       }
     }
-  }, [model, classes, inputDims]);
+  }, [gestureRecognizer]);
 
+  // Start the gesture recognition loop
   useEffect(() => {
     const interval = setInterval(() => {
       processFrame();
@@ -78,15 +106,21 @@ const WebCamCapture = ({ isLive, facingMode }) => {
   }, [processFrame]);
 
   return (
-    <div className="w-fulll h-full">
+    <div className="w-full h-full">
       {isLive && (
-        <div>
+        <div className="relative w-fit">
           <Webcam
             ref={webcamRef}
-            className="absolute top-0 left-0 w-full h-full object-cover"
+            className={`"object-cover -z-10 w-[${videoWidth}] h-[${videoHeight}]`}
+            mirrored
             videoConstraints={{
-              facingMode: facingMode, // Apply the current facing mode
+              facingMode: facingMode,
+              // Apply the current facing mode
             }}
+          />
+          <canvas
+            ref={canvasRef}
+            className={`absolute top-0 z-10 w-[${videoWidth}] h-[${videoHeight}] border-green-300 border-2 `}
           />
         </div>
       )}
