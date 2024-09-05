@@ -121,7 +121,7 @@ const WebCamCapture = ({ isLive, facingMode, handleInterpretUpdate }) => {
           />
           <canvas
             ref={canvasRef}
-            className={`absolute top-0 z-10 w-[${videoWidth}] h-[${videoHeight}] border-green-300 border-2 `}
+            className={`absolute top-0 z-10 w-[${videoWidth}] h-[${videoHeight}] `}
           />
         </div>
       )}
